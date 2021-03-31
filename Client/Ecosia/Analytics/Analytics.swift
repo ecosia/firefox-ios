@@ -268,6 +268,12 @@ final class Analytics {
     }
     
     func migrated(_ migration: Migration, in seconds: TimeInterval) {
+        print("\(migration.rawValue) in \(seconds))")
+
+        #if MOZ_CHANNEL_FENNEC
+        return
+        #endif
+
         tracker.track(SPStructured.build({
             $0.setCategory(Category.migration.rawValue)
             $0.setAction(Action.completed.rawValue)
