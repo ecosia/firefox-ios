@@ -12,23 +12,22 @@ extension EcosiaImport {
       return String((0..<length).map{ _ in letters.randomElement()! })
     }
 
-    func testFavorites(num: Int, finished: @escaping (Migration) -> ()) {
+    func testFavorites(num: Int, finished: @escaping (EcosiaImport.Status) -> ()) {
         let favs: [Page] = (0..<num).map { _ in
             let tld = EcosiaImport.randomString(length: 10)
             return Page(url: URL(string: "https://\(tld).org")!, title: tld)
         }
 
         let before = Date()
-        EcosiaFavourites.migrate(favs, to: profile) { (result) in
+        EcosiaFavourites.migrate(profile: profile) { (result) in
             switch result {
             case .success(let guids):
-                assert(guids.count == num)
                 let after = Date().timeIntervalSince(before)
                 NSLog("ECOSIA: Time to migrate \(num) favorites: \(after) s")
             case .failure:
                 break
             }
-            finished(Migration())
+            finished(.succeeded)
         }
 
     }
@@ -41,7 +40,7 @@ extension EcosiaImport {
         }
     }
 
-    func testHistoryLowLevel(num: Int, finished: @escaping (Migration) -> ()) {
+    func testHistoryLowLevel(num: Int, finished: @escaping (EcosiaImport.Status) -> ()) {
 
         let items = EcosiaImport.mockHistory(days: num, visits: num)
         let before = Date()
@@ -54,12 +53,12 @@ extension EcosiaImport {
             case .failure:
                 break
             }
-            finished(Migration())
+            finished(.succeeded)
         }
 
     }
 
-    func testAllSequentiallyV2(history: Int, favorites: Int, tabs: Int, finished: @escaping (Migration) -> ()) {
+    func testAllSequentiallyV2(history: Int, favorites: Int, tabs: Int, finished: @escaping (EcosiaImport.Status) -> ()) {
         let before = Date()
         testHistoryLowLevel(num: history) { (migration) in
             self.testFavorites(num: favorites) { (migration) in

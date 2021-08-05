@@ -2060,6 +2060,8 @@ extension BrowserViewController: UIAdaptivePresentationControllerDelegate {
 
 extension BrowserViewController {
     func presentIntroIfNeeded() {
+//        Core.User.shared.migratedFavorites = false
+
         if User.shared.firstTime {
             Analytics.shared.install()
             let welcome = Welcome()
@@ -2069,7 +2071,7 @@ extension BrowserViewController {
             User.shared.firstTime = false
             User.shared.migrated = true
             User.shared.hideWelcomeScreen()
-        } else if User.shared.migrated != true {
+        } else if User.shared.migrated != true || User.shared.migratedFavorites != true {
             present(LoadingScreen(profile: profile, tabManager: tabManager), animated: true)
         } else if User.shared.showsWelcomeScreen {
             present(UpgradeScreen(), animated: true)

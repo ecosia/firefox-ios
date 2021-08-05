@@ -58,9 +58,19 @@ final class LoadingScreen: UIViewController {
         
         migrate()
     }
-    
-    private var backgroundTaskID: UIBackgroundTaskIdentifier?
+
     private func migrate() {
+        if User.shared.migrated != true {
+            migrateHistory()
+        } else if User.shared.migratedFavorites != true {
+            migrateFavorites()
+        } else {
+            dismiss(animated: true)
+        }
+    }
+
+    private var backgroundTaskID: UIBackgroundTaskIdentifier?
+    private func migrateHistory() {
         guard !skip() else { return }
 
         NSSetUncaughtExceptionHandler { exception in
@@ -75,12 +85,10 @@ final class LoadingScreen: UIViewController {
         })
 
         let ecosiaImport = EcosiaImport(profile: profile)
-        ecosiaImport.migrate(progress: { [weak self] progress in
+        ecosiaImport.migrateHistory(progress: { [weak self] progress in
             self?.progress.setProgress(.init(progress), animated: true)
-        }){ [weak self] migration in
-            if case .succeeded = migration.favorites,
-               case .succeeded = migration.history {
-                
+        }){ [weak self] result in
+            if case .succeeded = result {
                 Analytics.shared.migration(true)
                 self?.cleanUp()
                 self?.dismiss(animated: true)
@@ -97,7 +105,39 @@ final class LoadingScreen: UIViewController {
             }
 
             if UIApplication.shared.applicationState != .active {
-                self?.profile._shutdown(force: false)
+                self?.profile._shutdown(force: true)
+            }
+        }
+    }
+
+    private func migrateFavorites() {
+        guard !skip() else { return }
+
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "Migration", expirationHandler: {
+            UIApplication.shared.endBackgroundTask(self.backgroundTaskID!)
+            self.backgroundTaskID = .invalid
+            // force shutting down profile to avoid crash by system
+            if UIApplication.shared.applicationState != .active {
+                self.profile._shutdown(force: true)
+            }
+        })
+
+        let ecosiaImport = EcosiaImport(profile: profile)
+        ecosiaImport.migrateFavourites { [weak self] result in
+            switch result {
+            case .succeeded:
+                self?.dismiss(animated: true)
+            case .failed:
+                self?.showError()
+            }
+            Core.User.shared.migratedFavorites = true
+
+            if let id = self?.backgroundTaskID {
+                UIApplication.shared.endBackgroundTask(id)
+            }
+
+            if UIApplication.shared.applicationState != .active {
+                self?.profile._shutdown(force: true)
             }
         }
     }
@@ -130,7 +170,6 @@ final class LoadingScreen: UIViewController {
     
     private func cleanUp() {
         History().deleteAll()
-        Favourites().items = []
         Tabs().clear()
     }
 }

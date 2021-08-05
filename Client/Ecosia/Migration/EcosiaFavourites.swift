@@ -8,63 +8,50 @@ import MozillaAppServices
 import Shared
 
 final class EcosiaFavourites {
-    static func migrate(_ favourites: [Page], to profile: Profile, progress: ((Double) -> ())? = nil, finished: @escaping (Result<[GUID], EcosiaImport.Failure>) -> ()){
-
-        guard !favourites.isEmpty else {
-            finished(.success([]))
-            return
-        }
+    static func migrate(profile: Profile, progress: ((Double) -> ())? = nil, finished: @escaping (Result<Void, EcosiaImport.Failure>) -> ()){
 
         if let error = profile.places.reopenIfClosed() {
             finished(.failure(.init(reasons: [error])))
             return
         }
 
-        let start = Date()
-        let favImport = DispatchGroup()
-        var errors = [MaybeErrorType]()
-        var guids = [GUID]()
+        profile.places.getBookmarksTree(rootGUID: BookmarkRoots.MobileFolderGUID, recursive: true).uponQueue(.main) { result in
 
-        for (i, page) in favourites.enumerated() {
-
-            guard let urlString = page.urlString else { continue }
-            
-            favImport.enter()
-
-            let bookmark = profile.places.createBookmark(parentGUID: "mobile______", url: urlString, title: page.title)
-
-            bookmark.uponQueue(.main) { guid in
-                switch guid {
-                case .success(let guid):
-                    guids.append(guid)
-                    // only report progress of every 20th bookmark as it's quick
-                    if i % 20 == 0 {
-                        progress?(Double(i) / Double(favourites.count))
-                    }
-                case .failure(let error):
-                    errors.append(error)
-                }
-                favImport.leave()
+            if case .failure(let error) = result {
+                finished(.failure(.init(reasons: [error])))
             }
-        }
 
-        favImport.notify(queue: .main) {
-            let duration = Date().timeIntervalSince(start)
-            Analytics.shared.migrated(.favourites, in: duration)
-
-            if errors.count > 0 {
-                finished(.failure(.init(reasons: errors)))
-            } else {
-                finished(.success(guids))
+            guard let folder = result.successValue as? BookmarkFolder, let children = folder.children else {
+                finished(.success(()))
+                return
             }
+
+            let nodes = folder.recursiveChildren()
+            let items = nodes.compactMap({ $0 as? BookmarkItem })
+
+
+            let pages: [Core.Page] = items.compactMap({
+                guard let url = URL(string: $0.url) else { return nil }
+                return Core.Page(url: url, title: $0.title)
+            })
+            Core.Favourites().items = pages
+            finished(.success(()))
         }
     }
-
 }
 
-extension Core.Page {
-    var urlString: String? {
-        guard !(url.host == nil && url.scheme != nil) else { return nil }
-        return url.scheme == nil ? "http://" + url.absoluteString : url.absoluteString
+extension BookmarkNode {
+    func recursiveChildren() -> [BookmarkItem] {
+        if let item = self as? BookmarkItem {
+            return [item]
+        }
+
+        if let folder = self as? BookmarkFolder {
+            return folder.children?.reduce([BookmarkItem](), { items, node in
+                items + node.recursiveChildren()
+            }) ?? []
+        }
+
+        return []
     }
 }

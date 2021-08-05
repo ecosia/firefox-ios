@@ -11,12 +11,7 @@ import Shared
 final class EcosiaImport {
 
     enum Status {
-        case initial, succeeded, failed(Failure)
-    }
-
-    class Migration {
-        var favorites: Status = .initial
-        var history: Status = .initial
+        case succeeded, failed(Failure)
     }
 
     struct Failure: Error {
@@ -47,49 +42,42 @@ final class EcosiaImport {
     }
 
     let profile: Profile
-
     private var progress: ((Double) -> ())?
 
     init(profile: Profile) {
         self.profile = profile
     }
 
-    private var favsProgress = 0.0 { didSet { progress?(totalProgress) } }
-    private var historyProgress = 0.0 { didSet { progress?(totalProgress) } }
-
-    private var totalProgress: Double {
-        return (favsProgress + historyProgress) / 2.0
-    }
-
-    func migrate(progress: ((Double) -> ())? = nil, finished: @escaping (Migration) -> ()) {
+    func migrateHistory(progress: ((Double) -> ())? = nil, finished: @escaping (Status) -> ()) {
         self.progress = progress
 
         // Migrate in order for performance reasons -> first history, then favorites
-        let migration = Migration()
         EcosiaHistory.migrate(Core.History().items, to: profile, progress: { historyProgress in
-            self.historyProgress = historyProgress
+            self.progress = progress
         }) { result in
+
+            self.progress?(1.0)
+
             switch result {
             case .success:
-                migration.history = .succeeded
+                finished(.succeeded)
             case .failure(let error):
-                migration.history = .failed(error)
+                finished(.failed(error))
                 Analytics.shared.migrationError(in: .history, message: error.description)
             }
-            self.historyProgress = 1.0
+        }
+    }
 
-            EcosiaFavourites.migrate(Core.Favourites().items, to: self.profile, progress: { favsProgress in
-                self.favsProgress = favsProgress
-            }) { result in
-                switch result {
-                case .success:
-                    migration.favorites = .succeeded
-                case .failure(let error):
-                    migration.favorites = .failed(error)
-                    Analytics.shared.migrationError(in: .favourites, message: error.description)
-                }
-                finished(migration)
-                self.progress = nil
+    func migrateFavourites(finished: @escaping (Status) -> ()) {
+
+        // Migrate in order for performance reasons -> first history, then favorites
+        EcosiaFavourites.migrate(profile: self.profile) { result in
+            switch result {
+            case .success:
+                finished(.succeeded)
+            case .failure(let error):
+                finished(.failed(error))
+                Analytics.shared.migrationError(in: .favourites, message: error.description)
             }
         }
     }
