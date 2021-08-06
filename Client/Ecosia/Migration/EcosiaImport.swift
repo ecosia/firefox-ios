@@ -77,7 +77,7 @@ final class EcosiaImport {
                 finished(.succeeded)
             case .failure(let error):
                 finished(.failed(error))
-                Analytics.shared.migrationError(in: .favourites, message: error.description)
+//                Analytics.shared.migrationError(in: .favourites, message: error.description)
             }
         }
     }

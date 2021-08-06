@@ -2060,8 +2060,6 @@ extension BrowserViewController: UIAdaptivePresentationControllerDelegate {
 
 extension BrowserViewController {
     func presentIntroIfNeeded() {
-//        Core.User.shared.migratedFavorites = false
-
         if User.shared.firstTime {
             Analytics.shared.install()
             let welcome = Welcome()
