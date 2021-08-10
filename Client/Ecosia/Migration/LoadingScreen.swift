@@ -64,6 +64,7 @@ final class LoadingScreen: UIViewController {
             migrateHistory()
         } else if User.shared.migratedFavorites != true {
             migrateFavorites()
+            progress.isHidden = true
         } else {
             dismiss(animated: true)
         }
