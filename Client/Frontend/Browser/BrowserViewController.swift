@@ -915,8 +915,10 @@ class BrowserViewController: UIViewController {
             title = url
         }
 
-        let shareItem = ShareItem(url: url, title: title, favicon: favicon)
-        profile.places.createBookmark(parentGUID: "mobile______", url: shareItem.url, title: shareItem.title)
+        guard let url = URL(string: url) else { return }
+
+        let shareItem = ShareItem(url: url.absoluteString, title: title, favicon: favicon)
+        profile.favourites.add(.init(url: url, title: title))
 
         var userData = [QuickActions.TabURLKey: shareItem.url]
         if let title = shareItem.title {
@@ -1396,14 +1398,13 @@ extension BrowserViewController: URLBarDelegate {
             }
         }
 
-        let deferredBookmarkStatus: Deferred<Maybe<Bool>> = fetchBookmarkStatus(for: urlString)
         let deferredPinnedTopSiteStatus: Deferred<Maybe<Bool>> = fetchPinnedTopSiteStatus(for: urlString)
 
         // Wait for both the bookmark status and the pinned status
-        deferredBookmarkStatus.both(deferredPinnedTopSiteStatus).uponQueue(.main) {
+        deferredPinnedTopSiteStatus.uponQueue(.main) { pinned in
             let shouldShowNewTabButton = self.profile.prefs.boolForKey(PrefsKeys.ShowNewTabToolbarButton) ?? (self.newTabUserResearch?.newTabState ?? false)
-            let isBookmarked = $0.successValue ?? false
-            let isPinned = $1.successValue ?? false
+            let isBookmarked = self.profile.favourites.isBookmarked(urlString)
+            let isPinned = pinned.successValue ?? false
             let pageActions = self.getTabActions(tab: tab, buttonView: button, presentShareMenu: actionMenuPresenter,
                                                  findInPage: findInPageAction, presentableVC: self, isBookmarked: isBookmarked,
                                                  isPinned: isPinned, shouldShowNewTabButton: shouldShowNewTabButton, success: successCallback)
@@ -1574,21 +1575,21 @@ extension BrowserViewController: URLBarDelegate {
         let possibleKeyword = String(trimmedText[..<possibleKeywordQuerySeparatorSpace])
         let possibleQuery = String(trimmedText[trimmedText.index(after: possibleKeywordQuerySeparatorSpace)...])
 
-        profile.places.getBookmarkURLForKeyword(keyword: possibleKeyword).uponQueue(.main) { result in
 
-            if var urlString = result.successValue ?? "",
-                let escapedQuery = possibleQuery.addingPercentEncoding(withAllowedCharacters: NSCharacterSet.urlQueryAllowed),
-                let range = urlString.range(of: "%s") {
-                urlString.replaceSubrange(range, with: escapedQuery)
+        let url = profile.favourites.search(possibleKeyword)?.url.absoluteString
 
-                if let url = URL(string: urlString) {
-                    self.finishEditingAndSubmit(url, visitType: VisitType.typed, forTab: currentTab)
-                    return
-                }
+        if var urlString = url,
+           let escapedQuery = possibleQuery.addingPercentEncoding(withAllowedCharacters: NSCharacterSet.urlQueryAllowed),
+           let range = urlString.range(of: "%s") {
+            urlString.replaceSubrange(range, with: escapedQuery)
+
+            if let url = URL(string: urlString) {
+                self.finishEditingAndSubmit(url, visitType: VisitType.typed, forTab: currentTab)
+                return
             }
-
-            self.submitSearchText(text, forTab: currentTab)
         }
+
+        self.submitSearchText(text, forTab: currentTab)
     }
 
     fileprivate func submitSearchText(_ text: String, forTab tab: Tab) {
@@ -2068,6 +2069,7 @@ extension BrowserViewController {
             self.profile.prefs.setInt(1, forKey: PrefsKeys.IntroSeen)
             User.shared.firstTime = false
             User.shared.migrated = true
+            User.shared.migratedFavorites = true
             User.shared.hideWelcomeScreen()
         } else if User.shared.migrated != true || User.shared.migratedFavorites != true {
             present(LoadingScreen(profile: profile, tabManager: tabManager), animated: true)

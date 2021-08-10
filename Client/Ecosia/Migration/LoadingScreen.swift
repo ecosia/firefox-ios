@@ -99,6 +99,7 @@ final class LoadingScreen: UIViewController {
             }
             
             Core.User.shared.migrated = true
+            Core.User.shared.migratedFavorites = true
             NSSetUncaughtExceptionHandler(nil)
 
             if let id = self?.backgroundTaskID {
@@ -132,6 +133,7 @@ final class LoadingScreen: UIViewController {
                 self?.showError()
             }
             Core.User.shared.migratedFavorites = true
+            Core.User.shared.migrated = true
 
             if let id = self?.backgroundTaskID {
                 UIApplication.shared.endBackgroundTask(id)
@@ -146,6 +148,7 @@ final class LoadingScreen: UIViewController {
     private func skip() -> Bool {
         if let exception = EcosiaImport.Exception.load() {
             Analytics.shared.migrationError(in: .exception, message: exception.reason)
+            Core.User.shared.migratedFavorites = true
             Core.User.shared.migrated = true
             EcosiaImport.Exception.clear()
             cleanUp()

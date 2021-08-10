@@ -94,6 +94,7 @@ class CommandStoringSyncDelegate: SyncDelegate {
  */
 protocol Profile: AnyObject {
     var places: RustPlaces { get }
+    var favourites: Core.Favourites { get }
     var prefs: Prefs { get }
     var queue: TabQueue { get }
     var searchEngines: SearchEngines { get }
@@ -427,6 +428,7 @@ open class BrowserProfile: Profile {
     lazy var placesDbPath = URL(fileURLWithPath: (try! files.getAndEnsureDirectory()), isDirectory: true).appendingPathComponent("places.db").path
 
     lazy var places = RustPlaces(databasePath: placesDbPath)
+    lazy var favourites = Core.Favourites()
 
     lazy var searchEngines: SearchEngines = {
         return SearchEngines(prefs: self.prefs, files: self.files)

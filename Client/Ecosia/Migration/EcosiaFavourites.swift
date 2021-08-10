@@ -21,13 +21,11 @@ final class EcosiaFavourites {
                 finished(.failure(.init(reasons: [error])))
             }
 
-            guard let folder = result.successValue as? BookmarkFolder, let children = folder.children else {
+            guard let folder = result.successValue as? BookmarkFolder else {
                 finished(.success(()))
                 return
             }
-
-            let nodes = folder.recursiveChildren()
-            let items = nodes.compactMap({ $0 as? BookmarkItem })
+            let items = folder.recursiveChildren()
 
             let pages: [Core.Page] = items.compactMap({
                 guard let url = URL(string: $0.url) else { return nil }
@@ -35,7 +33,7 @@ final class EcosiaFavourites {
             })
             debugPrint("FAVOURITES IMPORTED: \(pages.count)")
 
-            Core.Favourites().items = pages
+            profile.favourites.items = pages
             finished(.success(()))
         }
     }
